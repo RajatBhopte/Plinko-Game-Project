@@ -1,5 +1,7 @@
 Plinko Lab - Provably Fair Engine
 Author: Rajat Bhopte Role: Full-Stack Developer Intern Applicant, Daphnis Labs
+<img width="500" height="500" alt="image" src="https://github.com/user-attachments/assets/3307e041-e72f-48ed-b905-c70423ce0e57" />
+
 
 A full-stack, provably-fair Plinko game built with the MERN stack (React, Node.js, Express, MongoDB) and TypeScript. This project implements a deterministic physics engine and a cryptographic commit-reveal protocol to ensure 100% fair and verifiable gameplay.
 
