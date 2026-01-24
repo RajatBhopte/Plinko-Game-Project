@@ -5,7 +5,8 @@ import { BIN_MULTIPLIERS } from "../utils/fairness";
 
 // 1. Define your API URL from the .env file at the top
 // The '||' adds a safety fallback just in case the .env doesn't load
-const API_URL = import.meta.env.VITE_API_URL || "http://localhost:5000";
+const API_URL =
+  import.meta.env.VITE_API_URL || "https://plinko-game-project.onrender.com";
 
 export type GameResult = {
   path: string[];
