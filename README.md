@@ -12,7 +12,12 @@ MONGO_URI="mongodb://localhost:27017/plinko_db"
 PORT=5000
 
 Installation Steps
-1. Backend Setup
-cd backend
-npm install
-npm run dev
+Backend Setup
+1 cd backend
+2 npm install
+3 npm run dev
+
+Frontend Setup
+# cd frontend
+# npm install
+# npm run start
