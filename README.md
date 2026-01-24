@@ -9,6 +9,10 @@ A full-stack, provably-fair Plinko game built with the MERN stack (React, Node.j
 Live Application: https://plinko-game-project.vercel.app/
 
 🚀 How to Run Locally
+**Step 1: Clone the Repository**
+```
+git clone https://github.com/RajatBhopte/Plinko-Game-Project
+```
 Prerequisites
 Node.js (v18+)
 
@@ -24,17 +28,22 @@ Create a .env file in the root of your frontend directory:
 REACT_APP_API_URL="http://localhost:5000/api"
 
 
-Installation Steps
-1. Backend Setup
+### Installation Steps
+
+**1. Backend Setup**
+```
 cd backend
 npm install
 npm run dev
+```
 
 
 3. Frontend Setup
+```
 cd frontend
 npm install
 npm run start
+```
 The client will be running at http://localhost:3000 and the API at http://localhost:5000.
 
 🏗️ Architecture Overview
