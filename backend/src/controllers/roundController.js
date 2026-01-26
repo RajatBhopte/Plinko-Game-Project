@@ -4,7 +4,7 @@ const gameEngine = require("../services/gameEngine");
 
 // Symmetric Paytable for 13 bins (0 to 12)
 // Edges have high multipliers, center has low.
-const PAYTABLE = [10, 5, 2, 1.5, 1, 0.5, 0.2, 0.5, 1, 1.5, 2, 5, 10];
+const PAYTABLE = [10, 5, 2.5, 1.2, 0.5, 0.2, 0.2, 0.2, 0.5, 1.2, 2.5, 5, 10];
 
 exports.commitRound = async (req, res) => {
   try {
