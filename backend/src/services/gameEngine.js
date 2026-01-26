@@ -81,8 +81,15 @@
 const crypto = require("crypto");
 
 const ROWS = 12;
+const ROWS = 12;
 
 function runPlinkoRound(combinedSeed, dropColumn) {
+  // Validate dropColumn
+  if (dropColumn < 0 || dropColumn > 12) {
+    throw new Error("dropColumn must be between 0 and 12");
+  }
+
+  // 1. Seed the PRNG
   // Validate dropColumn
   if (dropColumn < 0 || dropColumn > 12) {
     throw new Error("dropColumn must be between 0 and 12");
@@ -96,6 +103,8 @@ function runPlinkoRound(combinedSeed, dropColumn) {
     prngState ^= prngState << 13;
     prngState ^= prngState >> 17;
     prngState ^= prngState << 5;
+    prngState >>>= 0;
+    return prngState / 4294967296;
     prngState >>>= 0;
     return prngState / 4294967296;
   }
@@ -113,29 +122,40 @@ function runPlinkoRound(combinedSeed, dropColumn) {
   }
 
   // 3. Compute Peg Map Hash
+  // 3. Compute Peg Map Hash
   const pegMapHash = crypto
     .createHash("sha256")
     .update(JSON.stringify(pegMap))
     .digest("hex");
 
   // 4. Calculate Path & Decisions
-  // pos tracks RIGHT moves (starts at 0, NOT dropColumn)
-  let pos = 0; // Number of RIGHT moves made
+  // FIXED: Start at the player's chosen drop column
+  let pos = dropColumn; // ✅ Start where player chose
   const path = [];
 
-  // Optional bias adjustment
-  const adj = (dropColumn - Math.floor(ROWS / 2)) * 0.01;
+  // Optional: Small bias adjustment based on drop column (makes minimal difference)
+  // const adj = (dropColumn - Math.floor(ROWS / 2)) * 0.01;
+  const adj = 0; // Disabled for cleaner physics
 
   for (let r = 0; r < ROWS; r++) {
-    // Peg index: at row r, we hit peg min(pos, r)
-    // This is because row r has (r+1) pegs numbered 0 to r
-    const pegIndex = Math.min(pos, r);
-    
+    // Calculate which peg we're hitting based on current position
+    // In a pyramid layout, row r has pegs from position (12-r)/2 to (12+r)/2
+    const rowStartPos = (12 - r) / 2;
+    const rowEndPos = (12 + r) / 2;
+
+    // Clamp position to valid peg range for this row
+    const clampedPos = Math.max(rowStartPos, Math.min(rowEndPos, pos));
+
+    // Peg index within the row (0 to r)
+    const pegIndex = Math.round(clampedPos - rowStartPos);
+
     const baseBias = pegMap[r][pegIndex];
     let bias = baseBias + adj;
     bias = Math.max(0, Math.min(1, bias));
+    bias = Math.max(0, Math.min(1, bias));
 
     const rnd = rand();
+    const direction = rnd < bias ? "L" : "R";
     const direction = rnd < bias ? "L" : "R";
 
     path.push({
@@ -148,16 +168,13 @@ function runPlinkoRound(combinedSeed, dropColumn) {
     });
 
     if (direction === "R") {
-      pos += 1; // Move right
+      pos += 1;
     }
-    // If L, pos stays the same
+    // If direction === "L", pos stays the same
   }
 
-  // Final bin = starting column + number of right moves
-  const binIndex = dropColumn + pos;
-  
-  // Clamp to valid range [0, 12]
-  const clampedBinIndex = Math.max(0, Math.min(12, binIndex));
+  // Clamp final bin to valid range [0, 12]
+  const binIndex = Math.max(0, Math.min(12, pos));
 
   return {
     pegMapHash,
