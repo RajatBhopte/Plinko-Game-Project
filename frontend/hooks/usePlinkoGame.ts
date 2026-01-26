@@ -30,61 +30,134 @@ export const usePlinkoGame = () => {
   const [clientSeed, setClientSeed] = useState("client-seed-123");
   const [nonce, setNonce] = useState<string | number>(0);
 
-  const dropBall = useCallback(
-    async (startColumn: number, betAmount: number) => {
-      if (isDropping) return;
-      setIsDropping(true);
+ const dropBall = useCallback(
+   async (
+     startColumn: number,
+     betAmount: number,
+   ): Promise<GameResult | null> => {
+     if (isDropping) {
+       console.warn("Already dropping a ball");
+       return null;
+     }
 
-      try {
-        // STEP 1: Commit Round (Using API_URL)
-        const commitRes = await fetch(`${API_URL}/api/rounds/commit`, {
-          method: "POST",
-        });
-        if (!commitRes.ok) throw new Error("Commit failed");
-        const commitData = await commitRes.json();
+     setIsDropping(true);
 
-        setNonce(commitData.nonce);
+     try {
+       // STEP 1: Commit Round
+       console.log("📤 Step 1: Committing round...");
+       const commitRes = await fetch(`${API_URL}/api/rounds/commit`, {
+         method: "POST",
+       });
 
-        // STEP 2: Start Game (Using API_URL)
-        const startRes = await fetch(
-          `${API_URL}/api/rounds/${commitData.roundId}/start`,
-          {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
-              clientSeed: clientSeed,
-              betCents: betAmount * 100, // Backend expects cents
-              dropColumn: startColumn,
-            }),
-          },
-        );
-        if (!startRes.ok) throw new Error("Game start failed");
-        const gameData = await startRes.json();
+       if (!commitRes.ok) {
+         throw new Error(`Commit failed: ${commitRes.status}`);
+       }
 
-        const simplePath = gameData.path.map((step: any) => step.direction);
+       const commitData = await commitRes.json();
+       console.log("✅ Commit response:", commitData);
+       setNonce(commitData.nonce);
 
-        const fullResult: GameResult = {
-          path: simplePath,
-          finalBin: gameData.binIndex,
-          payout: gameData.payoutMultiplier,
-          bet: betAmount,
-          serverSeed: "HIDDEN_UNTIL_REVEAL",
-          clientSeed,
-          nonce: commitData.nonce,
-          dropColumn: startColumn,
-          timestamp: Date.now(),
-          roundId: commitData.roundId,
-        };
+       // STEP 2: Start Game
+       console.log("📤 Step 2: Starting game...");
+       const startRes = await fetch(
+         `${API_URL}/api/rounds/${commitData.roundId}/start`,
+         {
+           method: "POST",
+           headers: { "Content-Type": "application/json" },
+           body: JSON.stringify({
+             clientSeed: clientSeed,
+             betCents: betAmount * 100,
+             dropColumn: startColumn,
+           }),
+         },
+       );
 
-        setLastResult(fullResult);
-        return fullResult;
-      } catch (error) {
-        console.error("API Error during drop:", error);
-        setIsDropping(false);
-      }
-    },
-    [clientSeed, isDropping],
-  );
+       if (!startRes.ok) {
+         throw new Error(`Game start failed: ${startRes.status}`);
+       }
+
+       const gameData = await startRes.json();
+       console.log("✅ Game start response:", gameData);
+
+       // CRITICAL: Extract the path correctly
+       console.log("🔍 Raw pathJson:", gameData.pathJson);
+       console.log("🔍 Raw path:", gameData.path);
+
+       // Backend might return either "path" or "pathJson"
+       const rawPath = gameData.pathJson || gameData.path;
+
+       if (!rawPath || !Array.isArray(rawPath)) {
+         console.error("❌ Invalid path data:", rawPath);
+         throw new Error("Backend did not return valid path data");
+       }
+
+       console.log("🔍 Path array length:", rawPath.length);
+       console.log("🔍 First path element:", rawPath[0]);
+
+       // Extract direction strings from objects
+       const simplePath: string[] = rawPath.map((step: any, index: number) => {
+         if (typeof step === "object" && step.direction) {
+           console.log(
+             `  Row ${index}: ${step.direction} (peg ${step.peg}, bias ${step.finalBias}, rnd ${step.rnd})`,
+           );
+           return step.direction;
+         } else if (typeof step === "string") {
+           return step;
+         } else {
+           console.error(`  Row ${index}: Invalid step format:`, step);
+           return "LEFT"; // Fallback
+         }
+       });
+
+       console.log("✅ Processed path:", simplePath);
+       console.log("✅ Final bin from backend:", gameData.binIndex);
+       console.log("✅ Drop column:", startColumn);
+
+       // Verify path math
+       let debugPos = startColumn;
+       simplePath.forEach((dir, i) => {
+         if (dir.toUpperCase().includes("RIGHT") || dir === "R") {
+           debugPos++;
+           console.log(`  Row ${i}: ${dir} → position ${debugPos}`);
+         } else {
+           console.log(`  Row ${i}: ${dir} → position ${debugPos} (stay)`);
+         }
+       });
+       console.log(
+         `🧮 Calculated final position: ${debugPos}, Backend says: ${gameData.binIndex}`,
+       );
+       if (debugPos !== gameData.binIndex) {
+         console.error(
+           "⚠️ WARNING: Calculated position doesn't match backend!",
+         );
+       }
+
+       const fullResult: GameResult = {
+         path: simplePath,
+         finalBin: gameData.binIndex,
+         payout: gameData.payoutMultiplier,
+         bet: betAmount,
+         serverSeed: "HIDDEN_UNTIL_REVEAL",
+         clientSeed,
+         nonce: commitData.nonce,
+         dropColumn: startColumn,
+         timestamp: Date.now(),
+         roundId: commitData.roundId,
+       };
+
+       console.log("✅ Full result object:", fullResult);
+       setLastResult(fullResult);
+
+       return fullResult;
+     } catch (error) {
+       console.error("❌ API Error during drop:", error);
+       setIsDropping(false);
+       return null;
+     }
+   },
+   [clientSeed, isDropping],
+ );
+
 
   const finishDrop = useCallback(() => {
     setIsDropping(false);

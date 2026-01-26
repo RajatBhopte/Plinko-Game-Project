@@ -16,6 +16,7 @@ interface ControlPanelProps {
 
 const PayTableLegend = () => {
   const payouts = [10, 5, 2.5, 1.2, 0.5, 0.2, 0.2, 0.2, 0.5, 1.2, 2.5, 5, 10];
+                   
   return (
     <div className="mt-2">
       <label className="text-slate-500 text-[10px] font-bold uppercase tracking-wider mb-1 block">
