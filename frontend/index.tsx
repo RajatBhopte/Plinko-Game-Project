@@ -4,7 +4,7 @@ import { PlinkoBoard } from "./components/PlinkoBoard";
 import { ControlPanel } from "./components/ControlPanel";
 import { Verifier } from "./components/Verifier";
 import { usePlinkoGame } from "./hooks/usePlinkoGame";
-  import { initAudio, toggleMute } from "./utils/audio";
+import { initAudio, toggleMute } from "./utils/audio";
 
 type View = "game" | "verifier";
 
@@ -22,7 +22,7 @@ const App = () => {
     clientSeed,
     setClientSeed,
     revealRound,
-    finishDrop,    // ADD THIS
+    finishDrop,
     multipliers,
     nonce,
   } = usePlinkoGame();
@@ -42,43 +42,95 @@ const App = () => {
     };
   }, []);
 
-  const handleReveal = async () => {
-    console.log("=== REVEAL BUTTON CLICKED ===");
-    console.log("lastResult:", lastResult);
-    console.log("lastResult?.roundId:", lastResult?.roundId);
-    console.log("lastResult?.serverSeed:", lastResult?.serverSeed);
-    console.log(
-      "Condition check:",
-      lastResult?.roundId && lastResult.serverSeed === "HIDDEN_UNTIL_REVEAL",
-    );
+  // FIXED: Properly handle drop with async/await
+  const handleDrop = async () => {
+     const result = await dropBall(dropColumn, betAmount);
 
-    if (
-      lastResult?.roundId &&
-      lastResult.serverSeed === "HIDDEN_UNTIL_REVEAL"
-    ) {
-      console.log("✓ Conditions met, calling revealRound...");
-      try {
-        const result = await revealRound(lastResult.roundId);
-        console.log("✓ Reveal completed, result:", result);
-      } catch (error) {
-        console.error("✗ Error revealing round:", error);
+     console.log("🔍 DEBUG MULTIPLIER MISMATCH:");
+     console.log("  Backend finalBin:", result?.finalBin);
+     console.log("  Backend payout:", result?.payout);
+     console.log("  Frontend multipliers array:", multipliers);
+     console.log(
+       "  Frontend multipliers[finalBin]:",
+       multipliers[result?.finalBin || 0],
+     );
+     console.log(
+       "  Do they match?",
+       result?.payout === multipliers[result?.finalBin || 0],
+     );
+    if (isDropping) {
+      console.log("⚠️ Already dropping, ignoring click");
+      return;
+    }
+
+    console.log("🎮 DROP BUTTON CLICKED");
+    console.log("Drop column:", dropColumn);
+    console.log("Bet amount:", betAmount);
+
+    try {
+      const result = await dropBall(dropColumn, betAmount);
+
+      if (!result) {
+        console.error("❌ dropBall returned null/undefined");
+        return;
       }
-    } else {
-      console.log("✗ Conditions NOT met");
-      if (!lastResult?.roundId) console.log("  - Missing roundId");
-      if (lastResult?.serverSeed !== "HIDDEN_UNTIL_REVEAL") {
-        console.log(
-          "  - serverSeed is:",
-          lastResult?.serverSeed,
-          "instead of HIDDEN_UNTIL_REVEAL",
-        );
-      }
+
+      console.log("✅ Drop completed successfully:");
+      console.log("  - Path:", result.path);
+      console.log("  - Final bin:", result.finalBin);
+      console.log("  - Payout:", result.payout);
+      console.log("  - Round ID:", result.roundId);
+    } catch (error) {
+      console.error("❌ Error in handleDrop:", error);
     }
   };
 
-  const handleDrop = () => {
-    if (isDropping) return;
-    dropBall(dropColumn, betAmount);
+  // FIXED: Auto-reveal after animation finishes
+  useEffect(() => {
+    // When isDropping changes from true to false, animation finished
+    if (
+      !isDropping &&
+      lastResult?.roundId &&
+      lastResult.serverSeed === "HIDDEN_UNTIL_REVEAL"
+    ) {
+      console.log(
+        "🔓 Animation finished, auto-revealing round:",
+        lastResult.roundId,
+      );
+
+      // Small delay to let confetti finish
+      setTimeout(() => {
+        revealRound(lastResult.roundId!)
+          .then((seed) => {
+            console.log("✅ Round revealed, server seed:", seed);
+          })
+          .catch((err) => {
+            console.error("❌ Failed to reveal round:", err);
+          });
+      }, 500);
+    }
+  }, [isDropping, lastResult?.roundId]);
+
+  // Manual reveal button handler
+  const handleReveal = async () => {
+    console.log("🔓 MANUAL REVEAL BUTTON CLICKED");
+
+    if (!lastResult?.roundId) {
+      console.error("❌ No roundId available");
+      return;
+    }
+
+    if (lastResult.serverSeed !== "HIDDEN_UNTIL_REVEAL") {
+      console.log("⚠️ Already revealed:", lastResult.serverSeed);
+      return;
+    }
+
+    try {
+      const seed = await revealRound(lastResult.roundId);
+      console.log("✅ Reveal successful:", seed);
+    } catch (error) {
+      console.error("❌ Reveal failed:", error);
+    }
   };
 
   const handleMuteToggle = () => {
@@ -92,15 +144,19 @@ const App = () => {
 
     const handleKeyDown = (e: KeyboardEvent) => {
       if (isDropping) return;
+
       if (e.code === "Space") {
         e.preventDefault();
         handleDrop();
       } else if (e.code === "ArrowLeft") {
+        e.preventDefault();
         setDropColumn((prev) => Math.max(0, prev - 1));
       } else if (e.code === "ArrowRight") {
+        e.preventDefault();
         setDropColumn((prev) => Math.min(12, prev + 1));
       }
     };
+
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
   }, [dropColumn, betAmount, isDropping, view]);
@@ -153,8 +209,9 @@ const App = () => {
                 isDropping={isDropping}
                 path={lastResult?.path}
                 finalBin={lastResult?.finalBin}
-                onFinishDrop={finishDrop} // ADD THIS
-                multipliers={multipliers} // ADD THIS
+                onFinishDrop={finishDrop}
+                multipliers={multipliers}
+                isMuted={isMuted}
               />
             </div>
 
@@ -182,6 +239,7 @@ const App = () => {
                   Drop
                 </p>
               </header>
+
               {/* Control Panel */}
               <div className="shrink-0">
                 <ControlPanel
@@ -198,34 +256,75 @@ const App = () => {
                   nonce={nonce}
                 />
               </div>
-              {lastResult && !isDropping && (
+
+              {/* FIXED: Last Result Display */}
+              {lastResult && (
                 <div className="bg-slate-900/40 rounded-xl p-4 border border-slate-800 shadow-inner">
                   <h3 className="text-slate-500 text-[10px] font-bold uppercase tracking-wider mb-3">
-                    Fairness Details
+                    Last Drop Result
                   </h3>
+
+                  {/* Result Summary */}
+                  <div className="bg-slate-800/50 rounded-lg p-3 mb-3 border border-slate-700">
+                    <div className="flex justify-between items-center mb-2">
+                      <span className="text-slate-400 text-xs">Final Bin:</span>
+                      <span className="text-cyan-400 font-mono font-bold text-lg">
+                        {lastResult.finalBin}
+                      </span>
+                    </div>
+                    <div className="flex justify-between items-center mb-2">
+                      <span className="text-slate-400 text-xs">
+                        Multiplier:
+                      </span>
+                      <span
+                        className={`font-mono font-bold text-lg ${lastResult.payout >= 1 ? "text-green-400" : "text-red-400"}`}
+                      >
+                        {lastResult.payout}x
+                      </span>
+                    </div>
+                    <div className="flex justify-between items-center">
+                      <span className="text-slate-400 text-xs">Payout:</span>
+                      <span className="text-white font-bold text-lg">
+                        ${(lastResult.bet * lastResult.payout).toFixed(2)}
+                      </span>
+                    </div>
+                  </div>
+
+                  {/* Fairness Details */}
+                  <h4 className="text-slate-500 text-[9px] font-bold uppercase tracking-wider mb-2">
+                    Fairness Details
+                  </h4>
                   <div className="flex flex-col gap-2 text-xs font-mono text-slate-300">
-                    <p>
-                      <span className="text-slate-500">Client:</span>{" "}
-                      {lastResult.clientSeed}
-                    </p>
-                    <p>
-                      <span className="text-slate-500">Nonce:</span>{" "}
-                      {lastResult.nonce}
-                    </p>
-                    <div className="flex items-center gap-2">
-                      <span className="text-slate-500">Server:</span>
+                    <div className="flex flex-col gap-1">
+                      <span className="text-slate-500 text-[10px]">
+                        Client Seed:
+                      </span>
+                      <span className="bg-slate-800/50 px-2 py-1 rounded text-[10px] break-all">
+                        {lastResult.clientSeed}
+                      </span>
+                    </div>
+
+                    <div className="flex justify-between items-center">
+                      <span className="text-slate-500 text-[10px]">Nonce:</span>
+                      <span className="bg-slate-800/50 px-2 py-1 rounded text-[10px]">
+                        {lastResult.nonce}
+                      </span>
+                    </div>
+
+                    <div className="flex flex-col gap-1">
+                      <span className="text-slate-500 text-[10px]">
+                        Server Seed:
+                      </span>
                       {lastResult.serverSeed === "HIDDEN_UNTIL_REVEAL" ? (
                         <button
                           onClick={handleReveal}
-                          className="bg-cyan-500/20 text-cyan-400 hover:bg-cyan-500/30 border border-cyan-500/50 px-2 py-0.5 rounded text-[10px] font-bold transition-all active:scale-95"
+                          disabled={isDropping}
+                          className="bg-cyan-500/20 text-cyan-400 hover:bg-cyan-500/30 border border-cyan-500/50 px-3 py-1.5 rounded text-xs font-bold transition-all active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed"
                         >
-                          REVEAL SEED
+                          🔓 REVEAL SERVER SEED
                         </button>
                       ) : (
-                        <span
-                          className="text-green-400 truncate max-w-[200px]"
-                          title={lastResult.serverSeed}
-                        >
+                        <span className="bg-green-900/30 text-green-400 px-2 py-1 rounded text-[10px] break-all border border-green-500/30">
                           {lastResult.serverSeed}
                         </span>
                       )}
@@ -233,6 +332,7 @@ const App = () => {
                   </div>
                 </div>
               )}
+
               {/* History */}
               <div
                 className="bg-slate-900/40 rounded-xl p-4 border border-slate-800 flex-1 min-h-[200px] flex flex-col shadow-inner overflow-hidden"
@@ -265,6 +365,9 @@ const App = () => {
                             <div
                               className={`w-1.5 h-1.5 rounded-full ${game.payout >= 1 ? "bg-green-400 shadow-[0_0_8px_rgba(74,222,128,0.5)]" : "bg-red-400"}`}
                             ></div>
+                            <span className="text-[10px] text-slate-500">
+                              Bin {game.finalBin}
+                            </span>
                             <span
                               className={`font-mono text-xs font-bold ${game.payout >= 1 ? "text-green-400" : "text-slate-400"}`}
                             >
@@ -280,9 +383,7 @@ const App = () => {
                             #{game.nonce}
                           </div>
                           <button
-                            onClick={() => {
-                              setView("verifier");
-                            }}
+                            onClick={() => setView("verifier")}
                             className="text-[9px] text-cyan-500 hover:text-cyan-300 uppercase font-bold"
                           >
                             Verify
@@ -318,4 +419,4 @@ const container = document.getElementById("root");
 if (container) {
   const root = createRoot(container);
   root.render(<App />);
-  }
+}
