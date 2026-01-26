@@ -61,6 +61,7 @@ app.post("/api/rounds/:id/start", roundController.startRound);
 app.post("/api/rounds/:id/reveal", roundController.revealRound);
 
 // 4. Verify round by ID (MUST come BEFORE generic /:id route)
+app.get("/api/verify", roundController.verifyRound);
 app.get("/api/rounds/:id/verify", roundController.verifyRoundById);
 
 // 5. Get round by ID (comes AFTER specific routes)

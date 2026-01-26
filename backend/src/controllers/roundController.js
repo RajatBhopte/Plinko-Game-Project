@@ -123,32 +123,82 @@ exports.verifyRound = async (req, res) => {
   try {
     const { serverSeed, clientSeed, nonce, dropColumn } = req.query;
 
-    // Parse dropColumn to Int
+    if (!serverSeed || !clientSeed || !nonce || !dropColumn) {
+      return res.status(400).json({
+        error:
+          "Missing required parameters: serverSeed, clientSeed, nonce, dropColumn",
+      });
+    }
+
     const dropColInt = parseInt(dropColumn, 10);
+    if (isNaN(dropColInt) || dropColInt < 0 || dropColInt > 12) {
+      return res
+        .status(400)
+        .json({ error: "dropColumn must be between 0 and 12" });
+    }
 
-    // 1. Recompute Commit Hex
-    const commitHex = cryptoUtils.sha256(`${serverSeed}:${nonce}`);
+    // 1. Find the round in database with these exact parameters
+    const round = await Round.findOne({
+      serverSeed,
+      clientSeed,
+      nonce,
+      dropColumn: dropColInt,
+      status: "REVEALED", // Only verify revealed rounds
+    });
 
-    // 2. Recompute Combined Seed
-    const combinedSeed = cryptoUtils.getCombinedSeed(
+    if (!round) {
+      return res.status(404).json({
+        error: "No revealed round found with these parameters",
+        isValid: false,
+      });
+    }
+
+    // 2. Recompute everything
+    const recomputedCommitHex = cryptoUtils.sha256(`${serverSeed}:${nonce}`);
+    const recomputedCombinedSeed = cryptoUtils.getCombinedSeed(
       serverSeed,
       clientSeed,
       nonce,
     );
+    const {
+      pegMapHash: recomputedPegMapHash,
+      binIndex: recomputedBinIndex,
+      path: recomputedPath,
+    } = gameEngine.runPlinkoRound(recomputedCombinedSeed, dropColInt);
 
-    // 3. Rerun Deterministic Engine
-    const { pegMapHash, binIndex, path } = gameEngine.runPlinkoRound(
-      combinedSeed,
-      dropColInt,
-    );
+    // 3. Compare stored vs recomputed
+    const commitMatch = recomputedCommitHex === round.commitHex;
+    const combinedSeedMatch = recomputedCombinedSeed === round.combinedSeed;
+    const pegMapHashMatch = recomputedPegMapHash === round.pegMapHash;
+    const binIndexMatch = recomputedBinIndex === round.binIndex;
 
-    // 4. Return results for frontend verification
+    const isValid =
+      commitMatch && combinedSeedMatch && pegMapHashMatch && binIndexMatch;
+
+    // 4. Return detailed verification result
     res.json({
-      commitHex,
-      combinedSeed,
-      pegMapHash,
-      binIndex,
-      path, // Useful for the frontend to replay the exact path
+      isValid,
+      roundId: round._id,
+      original: {
+        commitHex: round.commitHex,
+        combinedSeed: round.combinedSeed,
+        pegMapHash: round.pegMapHash,
+        binIndex: round.binIndex,
+        payoutMultiplier: round.payoutMultiplier,
+      },
+      recomputed: {
+        commitHex: recomputedCommitHex,
+        combinedSeed: recomputedCombinedSeed,
+        pegMapHash: recomputedPegMapHash,
+        binIndex: recomputedBinIndex,
+        path: recomputedPath,
+      },
+      matches: {
+        commitHex: commitMatch,
+        combinedSeed: combinedSeedMatch,
+        pegMapHash: pegMapHashMatch,
+        binIndex: binIndexMatch,
+      },
     });
   } catch (error) {
     res.status(500).json({ error: error.message });
