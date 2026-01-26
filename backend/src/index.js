@@ -22,6 +22,11 @@ app.post("/api/rounds/:id/reveal", roundController.revealRound);
 app.get("/api/rounds/:id", roundController.getRound);
 app.get("/api/verify", roundController.verifyRound);
 
+app.get("/api/rounds/:id/verify", roundController.verifyRoundById);
+
+// RENAMED: Public calculator (not real verification)
+app.get("/api/verify", roundController.calculateRound);
+
 
 const PORT = process.env.PORT || 5000;
 
