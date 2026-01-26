@@ -119,26 +119,18 @@ function runPlinkoRound(combinedSeed, dropColumn) {
     .digest("hex");
 
   // 4. Calculate Path & Decisions
-  // FIXED: Start at the player's chosen drop column
-  let pos = dropColumn; // ✅ Start where player chose
+  // pos tracks RIGHT moves (starts at 0, NOT dropColumn)
+  let pos = 0; // Number of RIGHT moves made
   const path = [];
 
-  // Optional: Small bias adjustment based on drop column (makes minimal difference)
-  // const adj = (dropColumn - Math.floor(ROWS / 2)) * 0.01;
-  const adj = 0; // Disabled for cleaner physics
+  // Optional bias adjustment
+  const adj = (dropColumn - Math.floor(ROWS / 2)) * 0.01;
 
   for (let r = 0; r < ROWS; r++) {
-    // Calculate which peg we're hitting based on current position
-    // In a pyramid layout, row r has pegs from position (12-r)/2 to (12+r)/2
-    const rowStartPos = (12 - r) / 2;
-    const rowEndPos = (12 + r) / 2;
-
-    // Clamp position to valid peg range for this row
-    const clampedPos = Math.max(rowStartPos, Math.min(rowEndPos, pos));
-
-    // Peg index within the row (0 to r)
-    const pegIndex = Math.round(clampedPos - rowStartPos);
-
+    // Peg index: at row r, we hit peg min(pos, r)
+    // This is because row r has (r+1) pegs numbered 0 to r
+    const pegIndex = Math.min(pos, r);
+    
     const baseBias = pegMap[r][pegIndex];
     let bias = baseBias + adj;
     bias = Math.max(0, Math.min(1, bias));
@@ -156,20 +148,24 @@ function runPlinkoRound(combinedSeed, dropColumn) {
     });
 
     if (direction === "R") {
-      pos += 1;
+      pos += 1; // Move right
     }
-    // If direction === "L", pos stays the same
+    // If L, pos stays the same
   }
 
-  // Clamp final bin to valid range [0, 12]
-  const binIndex = Math.max(0, Math.min(12, pos));
+  // Final bin = starting column + number of right moves
+  const binIndex = dropColumn + pos;
+  
+  // Clamp to valid range [0, 12]
+  const clampedBinIndex = Math.max(0, Math.min(12, binIndex));
 
   return {
     pegMapHash,
-    binIndex,
+    binIndex: clampedBinIndex,
     path,
   };
 }
 
 module.exports = { runPlinkoRound };
+
 
