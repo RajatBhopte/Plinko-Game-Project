@@ -13,20 +13,14 @@ app.use(express.json());
 // Connect to Database
 connectDB();
 
+
+
 // API Routes
 app.post("/api/rounds/commit", roundController.commitRound);
 app.post("/api/rounds/:id/start", roundController.startRound);
 app.post("/api/rounds/:id/reveal", roundController.revealRound);
 app.get("/api/rounds/:id", roundController.getRound);
 app.get("/api/verify", roundController.verifyRound);
-
-process.on("unhandledRejection", (err) => {
-  console.error("UNHANDLED REJECTION:", err);
-});
-
-process.on("uncaughtException", (err) => {
-  console.error("UNCAUGHT EXCEPTION:", err);
-});
 
 
 const PORT = process.env.PORT || 5000;
