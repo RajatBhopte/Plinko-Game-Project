@@ -153,6 +153,7 @@ function runPlinkoRound(combinedSeed, dropColumn) {
   }
 
   const binIndex = pos; // Final binIndex = pos (0..12) [cite: 39]
+  const clampedBinIndex = Math.max(0, Math.min(12, binIndex));
 
   return {
     pegMapHash,
