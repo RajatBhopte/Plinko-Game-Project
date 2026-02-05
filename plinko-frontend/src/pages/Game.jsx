@@ -102,7 +102,7 @@ export default function Game() {
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-900 via-gray-800 to-black text-white overflow-x-hidden">
-      <div className="fixed top-4 right-4 z-50 w-12 h-12">
+      <div className="fixed top-4 right-4 z-50 sizeng-10">
         <SoundToggle isMuted={isMuted} onToggle={() => setIsMuted(!isMuted)} />
       </div>
 
